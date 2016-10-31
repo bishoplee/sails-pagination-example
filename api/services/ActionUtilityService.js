@@ -78,6 +78,14 @@ actionUtil.parseCriteria = (req) => {
   return where;
 }
 
+function tryToParseJSON (json) {
+  if (!isString(json)) return null;
+  try {
+    return JSON.parse(json);
+  }
+  catch (e) { return e; }
+}
+
 module.exports = {
   util: actionUtil
 }
