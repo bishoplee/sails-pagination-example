@@ -1,8 +1,7 @@
 /**
  * Module dependencies
  */
-var actionUtil = require('../actionUtil'),
-  _ = require('lodash');
+_ = require('lodash');
 
 /**
  * Find Records
@@ -25,29 +24,26 @@ var actionUtil = require('../actionUtil'),
 module.exports = function findRecords(req, res) {
 
   // Look up the model
-  var Model = actionUtil.parseModel(req);
+  var Model = ActionUtilityService.util.parseModel(req);
 
 
   // If an `id` param was specified, use the findOne blueprint action
   // to grab the particular instance with its primary key === the value
   // of the `id` param.   (mainly here for compatibility for 0.9, where
   // there was no separate `findOne` action)
-  if (actionUtil.parsePk(req)) {
+  if (ActionUtilityService.util.parsePk(req)) {
     return require('./findOne')(req, res);
   }
 
   // Lookup for records that match the specified criteria
   var query = Model.find()
-    .where(actionUtil.parseCriteria(req))
-    .limit(actionUtil.parseLimit(req))
-    .skip(actionUtil.parseSkip(req))
-    .sort(actionUtil.parseSort(req));
-  query = actionUtil.populateRequest(query, req);
-  query.exec(function found(err, matchingRecords) {
-    if (err) return res.serverError(err);
-
-    // Only `.watch()` for new instances of the model if
-    // `autoWatch` is enabled.
+    .where(ActionUtilityService.util.parseCriteria(req))
+    .limit(ActionUtilityService.util.parseLimit(req))
+    .skip(ActionUtilityService.util.parseSkip(req))
+    .sort(ActionUtilityService.util.parseSort(req))
+    .paginate({page: ActionUtilityService.util.parsePage(req), limit: ActionUtilityService.util.parsePerPage(req)})
+  query = ActionUtilityService.util.populateRequest(query, req);
+  query.then((matchingRecords) => {
     if (req._sails.hooks.pubsub && req.isSocket) {
       Model.subscribe(req, matchingRecords);
       if (req.options.autoWatch) {
@@ -55,10 +51,15 @@ module.exports = function findRecords(req, res) {
       }
       // Also subscribe to instances of all associated models
       _.each(matchingRecords, function (record) {
-        actionUtil.subscribeDeep(req, record);
+        ActionUtilityService.util.subscribeDeep(req, record);
       });
     }
 
-    res.ok(matchingRecords);
-  });
+    Model.count().then((found) => {
+      res.set('Total', found)
+      res.ok(matchingRecords);
+    })
+  }).catch((err) => {
+    if (err) return res.serverError(err);
+  })
 };
